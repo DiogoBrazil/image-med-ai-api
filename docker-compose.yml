@@ -5,9 +5,9 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_USER: sgtribeiro
-      POSTGRES_PASSWORD: ribeiro123imageMed
-      POSTGRES_DB: imageMedVision
+      POSTGRES_USER: your_user
+      POSTGRES_PASSWORD: your_password
+      POSTGRES_DB: your_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
