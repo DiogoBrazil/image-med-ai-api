@@ -24,7 +24,7 @@ class AttendanceRepository:
         """Add a new attendance record with optional bounding boxes."""
         await self.init_pool()
         
-        # Extract and convert UUIDs from strings if necessary
+
         try:
             professional_id = attendance_data.get("professional_id")
             if isinstance(professional_id, str):
@@ -41,14 +41,14 @@ class AttendanceRepository:
             logger.error(f"Invalid UUID format in attendance data: {e}")
             return {"attendance_id": "", "added": False}
         
-        # Extract bounding boxes if present (for breast cancer model)
+
         bounding_boxes = attendance_data.pop("bounding_boxes", [])
         
         try:
             async with self.pool.acquire() as conn:
-                # Start a transaction
+
                 async with conn.transaction():
-                    # Insert attendance record
+
                     query = """
                         INSERT INTO attendances (
                             professional_id, health_unit_id, admin_id, 
@@ -72,7 +72,7 @@ class AttendanceRepository:
                         attendance_data.get("observations")
                     )
                     
-                    # If breast cancer model and has bounding boxes, insert them
+
                     if attendance_data["model_used"] == "breast" and bounding_boxes:
                         for box in bounding_boxes:
                             box_query = """
@@ -116,7 +116,7 @@ class AttendanceRepository:
         """
         await self.init_pool()
         try:
-            # Build the query dynamically based on filters
+
             query_parts = ["SELECT * FROM attendances WHERE 1=1"]
             params = []
             param_idx = 1
@@ -153,17 +153,17 @@ class AttendanceRepository:
                 params.append(model_used)
                 param_idx += 1
             
-            # Add order by, limit and offset
+
             query_parts.append(f" ORDER BY attendance_date DESC LIMIT ${param_idx} OFFSET ${param_idx+1}")
             params.extend([limit, offset])
             
-            # Combine the query
+
             query = " ".join(query_parts)
             
             async with self.pool.acquire() as conn:
                 attendances = await conn.fetch(query, *params)
                 
-                # For each attendance, fetch associated bounding boxes if breast cancer model
+
                 result = []
                 for attendance in attendances:
                     attendance_dict = {
@@ -180,7 +180,7 @@ class AttendanceRepository:
                         "observations": attendance["observations"]
                     }
                     
-                    # If breast cancer model, fetch associated bounding boxes
+
                     if attendance["model_used"] == "breast":
                         boxes_query = "SELECT * FROM bounding_boxes WHERE attendance_id = $1"
                         boxes = await conn.fetch(boxes_query, attendance["id"])
@@ -233,7 +233,7 @@ class AttendanceRepository:
                     "observations": attendance["observations"]
                 }
                 
-                # If breast cancer model, fetch associated bounding boxes
+
                 if attendance["model_used"] == "breast":
                     boxes_query = "SELECT * FROM bounding_boxes WHERE attendance_id = $1"
                     boxes = await conn.fetch(boxes_query, attendance_uuid)
@@ -266,7 +266,7 @@ class AttendanceRepository:
         try:
             attendance_uuid = uuid.UUID(attendance_id)
             
-            # Extract and convert UUIDs if present and as strings
+
             professional_id = attendance_data.get("professional_id")
             health_unit_id = attendance_data.get("health_unit_id")
             admin_id = attendance_data.get("admin_id")
@@ -278,12 +278,12 @@ class AttendanceRepository:
             if admin_id and isinstance(admin_id, str):
                 admin_id = uuid.UUID(admin_id)
                 
-            # Extract bounding boxes if present
+
             bounding_boxes = attendance_data.pop("bounding_boxes", None)
             
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
-                    # Check if attendance exists
+
                     check_query = "SELECT model_used FROM attendances WHERE id = $1"
                     existing = await conn.fetchval(check_query, attendance_uuid)
                     
@@ -294,7 +294,7 @@ class AttendanceRepository:
                             "updated": False
                         }
                     
-                    # Update the attendance record
+
                     update_parts = []
                     update_params = []
                     param_idx = 1
@@ -309,7 +309,7 @@ class AttendanceRepository:
                         "observations": attendance_data.get("observations")
                     }
                     
-                    # Only include fields that are present in the update data
+
                     for field, value in fields.items():
                         if value is not None:
                             update_parts.append(f"{field} = ${param_idx}")
@@ -322,12 +322,12 @@ class AttendanceRepository:
                         
                         updated_id = await conn.fetchval(update_query, *update_params)
                         
-                        # Update bounding boxes if the model is breast and boxes are provided
+
                         if existing == "breast" and bounding_boxes is not None:
-                            # Delete existing boxes
+
                             await conn.execute("DELETE FROM bounding_boxes WHERE attendance_id = $1", attendance_uuid)
                             
-                            # Insert new boxes
+
                             for box in bounding_boxes:
                                 box_query = """
                                     INSERT INTO bounding_boxes (
@@ -374,10 +374,10 @@ class AttendanceRepository:
             attendance_uuid = uuid.UUID(attendance_id)
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
-                    # First delete any associated bounding boxes
+
                     await conn.execute("DELETE FROM bounding_boxes WHERE attendance_id = $1", attendance_uuid)
                     
-                    # Then delete the attendance
+
                     query = "DELETE FROM attendances WHERE id = $1 RETURNING id"
                     deleted_id = await conn.fetchval(query, attendance_uuid)
                     
@@ -412,7 +412,7 @@ class AttendanceRepository:
         try:
             admin_uuid = uuid.UUID(admin_id)
             
-            # Define the time interval based on period
+
             interval_map = {
                 "day": "1 day",
                 "week": "1 week",
@@ -422,7 +422,7 @@ class AttendanceRepository:
             interval = interval_map.get(period.lower(), "1 month")
             
             async with self.pool.acquire() as conn:
-                # Get total count by model
+
                 model_count_query = """
                     SELECT model_used, COUNT(*) as count
                     FROM attendances
@@ -432,7 +432,7 @@ class AttendanceRepository:
                 """
                 model_counts = await conn.fetch(model_count_query, admin_uuid, interval)
                 
-                # Get accuracy by model
+
                 accuracy_query = """
                     SELECT model_used, 
                            COUNT(*) FILTER (WHERE correct_diagnosis = true) as correct,
@@ -445,7 +445,7 @@ class AttendanceRepository:
                 """
                 accuracy_data = await conn.fetch(accuracy_query, admin_uuid, interval)
                 
-                # Format the results
+
                 model_usage = {row["model_used"]: row["count"] for row in model_counts}
                 model_accuracy = {}
                 

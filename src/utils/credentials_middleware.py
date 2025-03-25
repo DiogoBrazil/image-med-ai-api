@@ -13,17 +13,15 @@ class AuthMiddleware:
     
     async def verify_request(self, request: Request):
         """
-        Verifica credenciais da requisição com base na rota.
+        Verifies request credentials based on the route.
         
-        Verifica a API key para todas as rotas.
-        Para rotas protegidas, verifica também o token JWT.
-        Para rotas de admin, verifica se o usuário é administrador.
+        Checks API key for all routes.
+        For protected routes, also checks JWT token.
+        For admin routes, verifies if the user is an administrator.
         """
-        # Obter cabeçalhos
         api_key = request.headers.get('api_key')
         token_value = request.headers.get('Authorization')
         
-        # Rotas públicas (apenas API key)
         public_paths = [
             '/api/auth/login',
             '/api/health',
@@ -31,31 +29,40 @@ class AuthMiddleware:
             '/api/openapi.json'
         ]
         
-        # Verificar API key para todas as requisições
+
         self._verify_api_key(api_key)
         
-        # Se for uma rota pública, não precisa de token
+
         if any([request.url.path.startswith(path) for path in public_paths]):
             return
         
-        # Para outras rotas, verificar token
+
         token_data = await self._verify_token(token_value)
         
-        # Para rotas de admin, verificar permissão
-        if self._is_admin_route(request.url.path):
+
+
+        if request.url.path == '/api/users/subscriptions' or request.url.path.startswith('/api/users/subscriptions/'):
+
+            if token_data.get('profile') != 'general_administrator':
+                raise HTTPException(status_code=403, detail={
+                    "message": "Only general administrators can access subscriptions",
+                    "status_code": 403
+                })
+
+        elif self._is_admin_route(request.url.path):
             self._verify_admin_access(token_data)
         
-        # Para rotas específicas de profissionais, verificar perfil
+
         if self._is_professional_route(request.url.path):
             self._verify_professional_access(token_data)
         
-        # Verificar permissão de acesso à unidade de saúde
+
         if self._is_health_unit_route(request.url.path):
             health_unit_id = self._extract_health_unit_id(request.url.path)
             if health_unit_id:
                 await self._verify_health_unit_access(token_data, health_unit_id)
         
-        # Adicionar dados do token ao request para uso nos endpoints
+
         request.state.user = token_data
     
     def _verify_api_key(self, api_key: str):
@@ -74,14 +81,14 @@ class AuthMiddleware:
             logger.warning("Token missing in request")
             raise HTTPException(status_code=401, detail={"message": "Authorization token is required", "status_code": 401})
         
-        # Extrair token do cabeçalho (formato: "Bearer <token>")
+
         try:
             token = token_value.split(' ')[1] if token_value.startswith('Bearer ') else token_value
         except IndexError:
             logger.warning("Invalid Authorization header format")
             raise HTTPException(status_code=401, detail={"message": "Invalid Authorization header format. Use 'Bearer <token>'", "status_code": 401})
         
-        # Verificar e decodificar token
+
         try:
             decoded_token = await self.token_adapter.decode_token(token)
             return decoded_token
@@ -94,7 +101,7 @@ class AuthMiddleware:
     
     def _verify_admin_access(self, token_data: dict):
         """Verifica se o usuário tem perfil de administrador."""
-        if token_data.get('profile') != 'administrator':
+        if token_data.get('profile') != 'general_administrator':
             logger.warning(f"User {token_data.get('user_id')} tried to access admin route without admin privileges")
             raise HTTPException(status_code=403, detail={
                 "message": "Unauthorized. This request can only be made by administrators.",
@@ -115,22 +122,23 @@ class AuthMiddleware:
         Verifica se o usuário tem acesso à unidade de saúde específica.
         Esta implementação depende do repository, então apenas definimos a interface.
         """
-        # Esta verificação seria implementada no controller, usando o repository
-        # para verificar se a unidade pertence ao admin do usuário
+
+
         pass
     
     def _is_admin_route(self, path: str) -> bool:
-        """Verifica se a rota é exclusiva para administradores."""
+        """Checks if the route is exclusive for administrators."""
         admin_routes = [
             '/api/admin/',
             '/api/health-units/create',
             '/api/users/professionals/create',
-            '/api/statistics/'
+            '/api/statistics/',
+            '/api/users/subscriptions'
         ]
         return any([path.startswith(route) for route in admin_routes])
     
     def _is_professional_route(self, path: str) -> bool:
-        """Verifica se a rota é exclusiva para profissionais."""
+        """Checks if the route is exclusive for professionals."""
         professional_routes = [
             '/api/attendances/create',
             '/api/diagnoses/'
@@ -138,11 +146,11 @@ class AuthMiddleware:
         return any([path.startswith(route) for route in professional_routes])
     
     def _is_health_unit_route(self, path: str) -> bool:
-        """Verifica se a rota envolve acesso a uma unidade de saúde específica."""
+        """Checks if the route involves access to a specific health unit."""
         return '/api/health-units/' in path and not path.endswith('/health-units/')
     
     def _extract_health_unit_id(self, path: str) -> str:
-        """Extrai o ID da unidade de saúde da URL, se presente."""
+        """Extracts the health unit ID from the URL, if present."""
         parts = path.split('/')
         for i, part in enumerate(parts):
             if part == 'health-units' and i + 1 < len(parts):

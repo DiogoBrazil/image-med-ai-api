@@ -18,7 +18,7 @@ class TokenAdapter:
             user_id: The user's UUID
             name: The user's full name
             email: The user's email address
-            profile: The user's profile (administrator or professional)
+            profile: The user's profile (general_administrator, administrator or professional)
             admin_id: If the user is a professional, the admin they're associated with
             
         Returns:
@@ -34,7 +34,6 @@ class TokenAdapter:
             "exp": expiration_time
         }
         
-        # Incluir admin_id no token apenas se for um profissional
         if profile == "professional" and admin_id:
             payload["admin_id"] = str(admin_id)
             
@@ -80,10 +79,10 @@ class TokenAdapter:
         try:
             return jwt.decode(token, self.secret_key, algorithms=['HS256'])
         except jwt.ExpiredSignatureError:
-            # Handle expired token specifically
+
             raise jwt.PyJWTError("Token has expired")
         except jwt.PyJWTError as e:
-            # Handle any other JWT errors
+
             raise jwt.PyJWTError(f"Invalid token: {str(e)}")
             
     async def get_user_id_from_token(self, token):
@@ -120,7 +119,7 @@ class TokenAdapter:
         decoded = await self.decode_token(token)
         profile = decoded.get("profile")
         
-        if profile == "administrator":
+        if profile == "administrator" and profile == "general_administrator":
             return decoded.get("user_id")
         elif profile == "professional":
             return decoded.get("admin_id")

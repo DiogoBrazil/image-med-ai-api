@@ -4,14 +4,14 @@ from ..controllers.health_unit_controller import HealthUnitController
 from ..interfaces.create_health_unit import CreateHealthUnit
 from ..interfaces.update_health_unit import UpdateHealthUnit
 
-# Definir prefixo para as rotas de unidades de saúde
+
 router = APIRouter(
     prefix="/api/health-units",
     tags=["health-units"],
     responses={404: {"description": "Not found"}},
 )
 
-# Instanciar o controller
+
 health_unit_controller = HealthUnitController()
 
 @router.post("/", status_code=201, summary="Criar uma nova unidade de saúde")

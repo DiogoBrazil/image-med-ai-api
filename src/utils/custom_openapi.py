@@ -21,21 +21,21 @@ def custom_openapi(app: FastAPI):
         routes=app.routes,
     )
 
-    # Adicionar componentes de segurança ao esquema OpenAPI
+
     if "components" not in openapi_schema:
         openapi_schema["components"] = {}
     if "securitySchemes" not in openapi_schema["components"]:
         openapi_schema["components"]["securitySchemes"] = {}
 
-    # Esquema de segurança para API Key
+
     openapi_schema["components"]["securitySchemes"]["api_key"] = {
         "type": "apiKey",
-        "name": "api_key",  # Nome do header atualizado para padrão x-prefixo
+        "name": "api_key",
         "in": "header",
         "description": "API key para acessar a API. Requerida para todas as requisições."
     }
 
-    # Esquema de segurança para token JWT
+
     openapi_schema["components"]["securitySchemes"]["bearer_token"] = {
         "type": "http",
         "scheme": "bearer",
@@ -43,13 +43,13 @@ def custom_openapi(app: FastAPI):
         "description": "Token JWT obtido através do endpoint de login. Requerido para a maioria dos endpoints."
     }
 
-    # Aplicar esquemas de segurança globalmente
+
     openapi_schema["security"] = [
         {"api_key": []},
         {"bearer_token": []}
     ]
 
-    # Adicionar tags com descrições
+
     openapi_schema["tags"] = [
         {
             "name": "users",
@@ -69,8 +69,8 @@ def custom_openapi(app: FastAPI):
         }
     ]
 
-    # Adicionar exemplos para alguns endpoints comuns
-    # Esta seção pode ser expandida conforme necessário
+
+
     if "paths" in openapi_schema:
         if "/api/users/login" in openapi_schema["paths"]:
             login_path = openapi_schema["paths"]["/api/users/login"]["post"]
@@ -80,6 +80,6 @@ def custom_openapi(app: FastAPI):
                     "password": "your_password"
                 }
 
-    # Armazenar o esquema personalizado no FastAPI
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema

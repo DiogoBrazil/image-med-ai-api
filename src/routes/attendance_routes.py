@@ -4,14 +4,14 @@ from ..controllers.attendace_controller import AttendanceController
 from ..interfaces.create_attendance import CreateAttendance
 from ..interfaces.update_attendance import UpdateAttendance
 
-# Definir prefixo para as rotas de atendimentos
+
 router = APIRouter(
     prefix="/api/attendances",
     tags=["attendances"],
     responses={404: {"description": "Not found"}},
 )
 
-# Instanciar o controller
+
 attendance_controller = AttendanceController()
 
 @router.post("/", status_code=201, summary="Criar um novo atendimento")

@@ -24,15 +24,15 @@ async def ensure_root_user():
     password_adapter = PasswordAdapter()
     
     try:
-        # Verificar conexão com banco de dados antes de prosseguir
+
         logger.info("Testando conexão com o banco de dados...")
         try:
-            # Extrair informações da string de conexão para log (sem a senha)
+
             db_url = settings.POSTGRES_URL
             db_info = db_url.split("@")[-1] if "@" in db_url else db_url
             logger.info(f"Tentando conectar a: {db_info}")
             
-            # Tentar estabelecer uma conexão simples
+
             conn = await asyncpg.connect(settings.POSTGRES_URL)
             await conn.close()
             logger.info("Conexão com banco de dados estabelecida com sucesso")
@@ -42,7 +42,7 @@ async def ensure_root_user():
             logger.error(f"Verifique se a URL do banco de dados está correta: {settings.POSTGRES_URL}")
             raise_http_error(500, error_msg)
         
-        # Inicializar o pool de conexões
+
         try:
             await user_repo.init_pool()
         except Exception as pool_err:
@@ -50,7 +50,7 @@ async def ensure_root_user():
             logger.error(error_msg)
             raise_http_error(500, error_msg)
         
-        # Verificar se já existe um usuário com o email do admin raiz
+
         try:
             existing_user = await user_repo.get_user_by_email(settings.USER_EMAIL_ROOT)
             
@@ -66,23 +66,23 @@ async def ensure_root_user():
             logger.error(error_msg)
             raise_http_error(500, error_msg)
         
-        # Verificar se o perfil está em conformidade com a constraint do banco
-        valid_profiles = ["administrator", "professional"]
+
+        valid_profiles = ["general_administrator", "administrator", "professional"]
         if settings.USER_ROOT_PROFILE not in valid_profiles:
             error_msg = f"Perfil inválido: {settings.USER_ROOT_PROFILE}. Perfis válidos: {', '.join(valid_profiles)}"
             logger.error(error_msg)
             raise_http_error(400, error_msg)
         
-        # Criar o usuário admin raiz
+
         logger.info(f"Criando usuário administrador raiz: {settings.USER_EMAIL_ROOT}")
         
         try:
-            # Hash da senha
+
             hashed_password = await password_adapter.hash_password(settings.USER_ROOT_PASSWORD)
             
-            # Dados do usuário
+
             user_data = {
-                "full_name": settings.USER_NAME_ROOT,  # Ajustado para 'name' conforme esquema do banco
+                "full_name": settings.USER_NAME_ROOT,
                 "email": settings.USER_EMAIL_ROOT,
                 "password_hash": hashed_password,
                 "profile": settings.USER_ROOT_PROFILE,
@@ -90,7 +90,7 @@ async def ensure_root_user():
                 "status": settings.USER_STATUS_ROOT
             }
             
-            # Adicionar o usuário
+
             result = await user_repo.add_user(user_data)
             
             if result["added"]:
@@ -106,7 +106,7 @@ async def ensure_root_user():
                 logger.error(error_msg)
                 raise_http_error(500, error_msg)
         except HTTPException as http_exc:
-            # Repassar exceções HTTP que já foram levantadas
+
             raise http_exc
         except Exception as user_create_err:
             error_msg = f"Erro ao criar usuário raiz: {str(user_create_err)}"
@@ -114,10 +114,10 @@ async def ensure_root_user():
             raise_http_error(500, error_msg)
     
     except HTTPException:
-        # Repassar HTTPExceptions para o chamador
+
         raise
     except Exception as e:
-        # Capturar qualquer outra exceção não tratada
+
         error_msg = f"Erro inesperado ao verificar/criar usuário administrador raiz: {str(e)}"
         logger.error(error_msg)
         import traceback

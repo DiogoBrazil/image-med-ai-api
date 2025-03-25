@@ -2,7 +2,8 @@ from fastapi import Request, Depends
 from ..interfaces.create_user import CreateUser
 from ..interfaces.update_user import UpdateUser
 from ..interfaces.login_user import LoginUser
-from ..usecases.user import UserService
+from ..interfaces.create_subscriptions import CreateSubscriptions
+from ..usecases.user_usecases import UserUseCases
 from ..utils.credentials_middleware import AuthMiddleware
 from ..utils.logger import get_logger
 
@@ -10,25 +11,26 @@ logger = get_logger(__name__)
 
 class UserController:
     def __init__(self):
-        self.user_service = UserService()
+        self.user_use_cases = UserUseCases()
         self.auth_middleware = AuthMiddleware()
     
     async def add_user(self, request: Request, user: CreateUser):
         """
-        Adiciona um novo usuário.
-        Requer perfil de administrador.
+        Adds a new user.
+        Requires administrator profile.
         """
         await self.auth_middleware.verify_request(request)
         
-        # Extrair informações do token para auditoria
         audit_data = {
             "user_id": request.state.user.get("user_id"),
             "action": "add_user",
             "ip_address": request.client.host
         }
+
+        admin_id = request.state.user.get("user_id")
+        admin_profile = request.state.user.get("profile")
         
-        # Apenas administradores podem adicionar usuários
-        if request.state.user.get("profile") != "administrator":
+        if request.state.user.get("profile") != "administrator" and request.state.user.get("profile") != "general_administrator":
             logger.warning(f"User {audit_data['user_id']} attempted to add user without admin privileges")
             return {
                 "detail": {
@@ -37,41 +39,37 @@ class UserController:
                 }
             }
             
-        return await self.user_service.add_user(user, audit_data)
+        return await self.user_use_cases.add_user(admin_profile, admin_id, user, audit_data)
 
     async def login_user(self, request: Request, user: LoginUser):
         """
-        Realiza login de usuário.
-        Não requer autenticação prévia.
+        Logs in a user.
+        Does not require prior authentication.
         """
-        # Para login, só precisamos verificar a API Key, não o token
         api_key = request.headers.get('api_key')
         self.auth_middleware._verify_api_key(api_key)
         
-        # Dados de auditoria baseados no IP
         audit_data = {
             "email": user.email,
             "action": "login",
             "ip_address": request.client.host
         }
         
-        return await self.user_service.login_user(user, audit_data)
+        return await self.user_use_cases.login_user(user, audit_data)
 
     async def get_users(self, request: Request, admin_id: str = None):
         """
-        Recupera todos os usuários.
-        Se admin_id for fornecido, retorna apenas usuários associados a esse admin.
+        Retrieves all users.
+        If admin_id is provided, returns only users associated with that admin.
         """
         await self.auth_middleware.verify_request(request)
         
-        # Extrair informações do token para auditoria
         audit_data = {
             "user_id": request.state.user.get("user_id"),
             "action": "get_users",
             "ip_address": request.client.host
         }
         
-        # Se o usuário for um profissional, só pode ver outros usuários do mesmo admin
         if request.state.user.get("profile") == "professional":
             admin_id = request.state.user.get("admin_id")
             if not admin_id:
@@ -83,17 +81,16 @@ class UserController:
                     }
                 }
         
-        return await self.user_service.get_users(admin_id, audit_data)
+        return await self.user_use_cases.get_users(admin_id, audit_data)
 
     async def get_user_by_id(self, request: Request, user_id: str):
         """
-        Recupera um usuário pelo ID.
-        Usuários só podem ver seus próprios dados ou, se administradores, 
-        dados de usuários vinculados a eles.
+        Retrieves a user by ID.
+        Users can only see their own data or, if administrators,
+        data of users linked to them.
         """
         await self.auth_middleware.verify_request(request)
         
-        # Extrair informações do token para auditoria
         audit_data = {
             "user_id": request.state.user.get("user_id"),
             "action": "get_user_by_id",
@@ -101,12 +98,10 @@ class UserController:
             "ip_address": request.client.host
         }
         
-        # Verificar permissão: usuário só pode ver seus próprios dados ou, 
-        # se administrador, dados de usuários vinculados a ele
         current_user_id = request.state.user.get("user_id")
         current_user_profile = request.state.user.get("profile")
         
-        if user_id != current_user_id and current_user_profile != "administrator":
+        if user_id != current_user_id and current_user_profile != "administrator" and current_user_profile != "general_administrator":
             logger.warning(f"User {current_user_id} attempted to access data of another user {user_id}")
             return {
                 "detail": {
@@ -115,17 +110,16 @@ class UserController:
                 }
             }
         
-        return await self.user_service.get_user_by_id(user_id, audit_data)
+        return await self.user_use_cases.get_user_by_id(user_id, audit_data)
 
     async def update_user(self, request: Request, user_id: str, user: UpdateUser):
         """
-        Atualiza informações de um usuário.
-        Usuários só podem atualizar seus próprios dados ou, se administradores,
-        dados de usuários vinculados a eles.
+        Updates user information.
+        Users can only update their own data or, if administrators,
+        data of users linked to them.
         """
         await self.auth_middleware.verify_request(request)
         
-        # Extrair informações do token para auditoria
         audit_data = {
             "user_id": request.state.user.get("user_id"),
             "action": "update_user",
@@ -133,12 +127,10 @@ class UserController:
             "ip_address": request.client.host
         }
         
-        # Verificar permissão: usuário só pode atualizar seus próprios dados ou,
-        # se administrador, dados de usuários vinculados a ele
         current_user_id = request.state.user.get("user_id")
         current_user_profile = request.state.user.get("profile")
         
-        if user_id != current_user_id and current_user_profile != "administrator":
+        if user_id != current_user_id and current_user_profile != "administrator" and current_user_profile != "general_administrator":
             logger.warning(f"User {current_user_id} attempted to update data of another user {user_id}")
             return {
                 "detail": {
@@ -147,16 +139,16 @@ class UserController:
                 }
             }
         
-        return await self.user_service.update_user(user_id, user, audit_data)
+        return await self.user_use_cases.update_user(current_user_id, current_user_profile, user_id, user, audit_data)
+    
 
     async def delete_user(self, request: Request, user_id: str):
         """
-        Remove um usuário.
-        Apenas administradores podem remover usuários.
+        Removes a user.
+        Only administrators can remove users.
         """
         await self.auth_middleware.verify_request(request)
         
-        # Extrair informações do token para auditoria
         audit_data = {
             "user_id": request.state.user.get("user_id"),
             "action": "delete_user",
@@ -164,8 +156,7 @@ class UserController:
             "ip_address": request.client.host
         }
         
-        # Apenas administradores podem remover usuários
-        if request.state.user.get("profile") != "administrator":
+        if request.state.user.get("profile") != "administrator" and request.state.user.get("profile") != "general_administrator":
             logger.warning(f"User {audit_data['user_id']} attempted to delete user without admin privileges")
             return {
                 "detail": {
@@ -174,25 +165,25 @@ class UserController:
                 }
             }
         
-        return await self.user_service.delete_user(user_id, audit_data)
+        current_user_id = request.state.user.get("user_id")
+        current_user_profie = request.state.user.get("profile")
+
+        return await self.user_use_cases.delete_user(current_user_id, current_user_profie, user_id, audit_data)
         
     async def get_administrators(self, request: Request):
         """
-        Recupera todos os administradores.
-        Apenas para uso interno ou super administradores.
+        Retrieves all administrators.
+        For internal use or super administrators only.
         """
         await self.auth_middleware.verify_request(request)
         
-        # Extrair informações do token para auditoria
         audit_data = {
             "user_id": request.state.user.get("user_id"),
             "action": "get_administrators",
             "ip_address": request.client.host
         }
         
-        # Verificar se o usuário tem permissão para listar administradores
-        # Esta verificação pode variar dependendo dos requisitos específicos
-        if request.state.user.get("profile") != "administrator":
+        if request.state.user.get("profile") != "general_administrator":
             logger.warning(f"User {audit_data['user_id']} attempted to list administrators without admin privileges")
             return {
                 "detail": {
@@ -201,16 +192,15 @@ class UserController:
                 }
             }
             
-        return await self.user_service.get_administrators(audit_data)
+        return await self.user_use_cases.get_administrators(audit_data)
         
     async def get_professionals(self, request: Request, admin_id: str = None):
         """
-        Recupera profissionais associados a um administrador.
-        Se admin_id não for fornecido, usa o ID do administrador do token.
+        Retrieves professionals associated with an administrator.
+        If admin_id not provided, uses the ID of the administrator from the token.
         """
         await self.auth_middleware.verify_request(request)
         
-        # Extrair informações do token para auditoria
         audit_data = {
             "user_id": request.state.user.get("user_id"),
             "action": "get_professionals",
@@ -220,11 +210,9 @@ class UserController:
         current_user_profile = request.state.user.get("profile")
         current_user_id = request.state.user.get("user_id")
         
-        # Se não for fornecido admin_id e o usuário for admin, usa o ID do usuário atual
         if not admin_id and current_user_profile == "administrator":
             admin_id = current_user_id
         
-        # Se for profissional, só pode ver profissionais do mesmo admin
         elif current_user_profile == "professional":
             admin_id = request.state.user.get("admin_id")
             if not admin_id:
@@ -236,4 +224,93 @@ class UserController:
                     }
                 }
         
-        return await self.user_service.get_professionals(admin_id, audit_data)
+        return await self.user_use_cases.get_professionals(admin_id, current_user_profile,audit_data)
+
+
+    async def create_subscription(self, request: Request, subscription: CreateSubscriptions):
+        """
+        Creates a professional subscription.
+        """
+        await self.auth_middleware.verify_request(request)
+        
+        audit_data = {
+            "user_id": request.state.user.get("user_id"),
+            "action": "create_subscription",
+            "ip_address": request.client.host
+        }
+
+        if request.state.user.get("profile") != "general_administrator":
+            logger.warning(f"User {audit_data['user_id']} attempted to create subscription without admin privileges")
+            return {
+                "detail": {
+                    "message": "Only general administrators can create subscriptions",
+                    "status_code": 403
+                }
+            }
+        
+        return await self.user_use_cases.create_subscription(subscription, audit_data)
+    
+
+    async def get_subscriptions(self, request: Request):
+        """
+        Retrieves all existing subscriptions.
+        """
+        try:
+            logger.info(f"Processing subscription listing request from {request.client.host}")
+            await self.auth_middleware.verify_request(request)
+            
+            user_data = request.state.user if hasattr(request.state, 'user') else {}
+            
+            audit_data = {
+                "user_id": user_data.get("user_id"),
+                "profile": user_data.get("profile"),
+                "action": "get_subscriptions",
+                "ip_address": request.client.host
+            }
+            
+            result = await self.user_use_cases.get_subscriptions(audit_data)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in get_subscriptions controller: {str(e)}")
+            raise
+    
+
+    async def get_subscription_by_id(self, request: Request, subscription_id: str):
+        """
+        Retrieves a professional's subscription by ID.
+        """
+        await self.auth_middleware.verify_request(request)
+        
+        audit_data = {
+            "user_id": request.state.user.get("user_id"),
+            "action": "get_subscription_by_id",
+            "target_subscription_id": subscription_id,
+            "ip_address": request.client.host
+        }
+
+        return await self.user_use_cases.get_subscription_by_id(subscription_id, audit_data)
+
+
+    async def update_subscription(self, request: Request, subscription_id: str, subscription: CreateSubscriptions):
+        """
+        Updates an existing subscription.
+        """
+        await self.auth_middleware.verify_request(request)
+        
+        audit_data = {
+            "user_id": request.state.user.get("user_id"),
+            "action": "update_subscription",
+            "ip_address": request.client.host
+        }
+
+        if request.state.user.get("profile") != "general_administrator":
+            logger.warning(f"User {audit_data['user_id']} attempted to update subscription without admin privileges")
+            return {
+                "detail": {
+                    "message": "Only general administrators can update subscriptions",
+                    "status_code": 403
+                }
+            }
+        
+        return await self.user_use_cases.update_subscription(subscription_id, subscription, audit_data)

@@ -24,7 +24,7 @@ class HealthUnitRepository:
         """Add a new health unit."""
         await self.init_pool()
         try:
-            # Convert admin_id string to UUID
+
             admin_id = unit_data.get("admin_id")
             if admin_id and isinstance(admin_id, str):
                 try:
@@ -126,7 +126,7 @@ class HealthUnitRepository:
         await self.init_pool()
         try:
             unit_uuid = uuid.UUID(unit_id)
-            # Convert admin_id string to UUID if present
+
             admin_id = unit_data.get("admin_id")
             if admin_id and isinstance(admin_id, str):
                 try:
@@ -176,7 +176,7 @@ class HealthUnitRepository:
         try:
             unit_uuid = uuid.UUID(unit_id)
             async with self.pool.acquire() as conn:
-                # First check if there are any professional assignments for this unit
+
                 check_query = "SELECT COUNT(*) FROM professional_assignments WHERE health_unit_id = $1"
                 count = await conn.fetchval(check_query, unit_uuid)
                 
@@ -188,7 +188,7 @@ class HealthUnitRepository:
                         "reason": "Unit has professional assignments"
                     }
                 
-                # Also check for attendances
+
                 check_query = "SELECT COUNT(*) FROM attendances WHERE health_unit_id = $1"
                 count = await conn.fetchval(check_query, unit_uuid)
                 
@@ -200,7 +200,7 @@ class HealthUnitRepository:
                         "reason": "Unit has attendances"
                     }
                 
-                # If no dependencies, proceed with deletion
+
                 delete_query = "DELETE FROM health_units WHERE id = $1 RETURNING id"
                 deleted_id = await conn.fetchval(delete_query, unit_uuid)
                 

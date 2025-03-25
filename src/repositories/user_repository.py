@@ -31,7 +31,7 @@ class UserRepository:
                 """
                 admin_id = user_data.get("admin_id")
                 
-                # Convert string to UUID if admin_id exists
+
                 if admin_id and isinstance(admin_id, str):
                     try:
                         admin_id = uuid.UUID(admin_id)
@@ -186,7 +186,7 @@ class UserRepository:
             user_uuid = uuid.UUID(user_id)
             admin_id = user_data.get("admin_id")
             
-            # Convert string to UUID if admin_id exists
+
             if admin_id and isinstance(admin_id, str):
                 try:
                     admin_id = uuid.UUID(admin_id)
@@ -317,6 +317,29 @@ class UserRepository:
         except Exception as e:
             logger.error(f"Error fetching administrators: {e}")
             return []
+    
+    async def get_professionals(self) -> List[Dict]:
+        """Retrieve all users with professionals profile."""
+        await self.init_pool()
+        try:
+            async with self.pool.acquire() as conn:
+                query = "SELECT * FROM users WHERE profile = 'professional'"
+                users = await conn.fetch(query)
+                logger.info(f"Found {len(users)} professionals")
+                return [
+                    {
+                        "id": str(user["id"]),
+                        "full_name": user["full_name"],
+                        "email": user["email"],
+                        "profile": user["profile"],
+                        "status": user["status"],
+                        "created_at": user["created_at"]
+                    }
+                    for user in users
+                ]
+        except Exception as e:
+            logger.error(f"Error fetching professionals: {e}")
+            return []
             
     async def get_professionals_by_admin(self, admin_id: str) -> List[Dict]:
         """Retrieve all professionals associated with a specific admin."""
@@ -344,3 +367,212 @@ class UserRepository:
         except Exception as e:
             logger.error(f"Error fetching professionals: {e}")
             return []
+        
+    
+    async def create_subscription(self, subscription_data: Dict) -> Dict:
+        """Create a new subscription for a professional."""
+        await self.init_pool()
+        try:
+            async with self.pool.acquire() as conn:
+                query = """
+                    INSERT INTO subscriptions (admin_id, start_date, end_date, status)
+                    VALUES ($1, $2, $3, $4) RETURNING id
+                """
+                admin_id = subscription_data.get("admin_id")
+                start_date = subscription_data.get("start_date")
+                end_date = subscription_data.get("end_date")
+                status = subscription_data.get("status", "active")
+                
+
+                if admin_id and isinstance(admin_id, str):
+                    try:
+                        admin_id = uuid.UUID(admin_id)
+                    except ValueError:
+                        logger.error(f"Invalid UUID format for admin_id: {admin_id}")
+                        return {"subscription_id": "", "added": False}
+                
+                returned_id = await conn.fetchval(
+                    query,
+                    admin_id,
+                    start_date,
+                    end_date,
+                    status
+                )
+                logger.info(f"Subscription added with ID {returned_id}")
+                return {
+                    "subscription_id": str(returned_id),
+                    "added": True
+                }
+        except Exception as e:
+            logger.error(f"Error adding subscription: {e}")
+            return {
+                "subscription_id": "",
+                "added": False
+            }
+    
+    async def get_subscriptions(self, user_id: str = None) -> List[Dict]:
+        """
+        Retrieve all subscriptions or subscriptions for a specific user.
+        
+        If user_id is provided, it will check if the user exists before returning subscriptions.
+        This is to handle the case where a user tries to access subscriptions.
+        """
+        await self.init_pool()
+        try:
+            async with self.pool.acquire() as conn:
+                if user_id:
+                    try:
+                        user_uuid = uuid.UUID(user_id)
+                        
+                        user_query = "SELECT id, full_name, profile FROM users WHERE id = $1"
+                        user = await conn.fetchrow(user_query, user_uuid)
+                        
+                        if not user:
+                            logger.warning(f"User with ID {user_id} not found when accessing subscriptions")
+                            raise ValueError("User not found")
+                    except ValueError as e:
+                        logger.error(f"Invalid user ID or user not found: {e}")
+                        raise ValueError("User not found")
+                
+                query = "SELECT * FROM subscriptions"
+                subscriptions = await conn.fetch(query)
+                
+                logger.info(f"Found {len(subscriptions)} subscriptions")
+                
+                return [
+                    {
+                        "id": str(subscription["id"]),
+                        "admin_id": str(subscription["admin_id"]),
+                        "start_date": subscription["start_date"],
+                        "end_date": subscription["end_date"],
+                        "status": subscription["status"]
+                    }
+                    for subscription in subscriptions
+                ]
+        except ValueError as e:
+            logger.error(f"Error validating user for subscriptions: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching subscriptions: {e}")
+            return []
+
+    
+    async def get_subscription_by_admin_id(self, admin_id: str) -> Optional[Dict]:
+        """Retrieve subscription data by admin ID."""
+        await self.init_pool()
+        try:
+            admin_uuid = uuid.UUID(admin_id)
+            async with self.pool.acquire() as conn:
+                query = "SELECT * FROM subscriptions WHERE admin_id = $1"
+                subscription = await conn.fetchrow(query, admin_uuid)
+                if subscription:
+                    logger.info(f"Subscription found for admin {admin_id}")
+                    return {
+                        "id": str(subscription["id"]),
+                        "admin_id": str(subscription["admin_id"]),
+                        "start_date": subscription["start_date"],
+                        "end_date": subscription["end_date"],
+                        "status": subscription["status"]
+                    }
+                else:
+                    logger.info(f"No subscription found for admin {admin_id}")
+                    return None
+        except ValueError:
+            logger.error(f"Invalid UUID format: {admin_id}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching subscription: {e}")
+            return None
+    
+
+    async def get_subscription_by_id(self, subscription_id: str) -> Optional[Dict]:
+        """Retrieve subscription data by ID."""
+        await self.init_pool()
+        try:
+            subscription_uuid = uuid.UUID(subscription_id)
+            async with self.pool.acquire() as conn:
+
+                user_check = "SELECT COUNT(*) FROM users"
+                user_count = await conn.fetchval(user_check)
+                if user_count == 0:
+                    logger.warning("No users found in database when accessing subscription by ID")
+                    raise ValueError("User not found")
+                
+
+                query = "SELECT * FROM subscriptions WHERE id = $1"
+                subscription = await conn.fetchrow(query, subscription_uuid)
+                if subscription:
+                    logger.info(f"Subscription found for ID {subscription_id}")
+                    return {
+                        "id": str(subscription["id"]),
+                        "admin_id": str(subscription["admin_id"]),
+                        "start_date": subscription["start_date"],
+                        "end_date": subscription["end_date"],
+                        "status": subscription["status"]
+                    }
+                else:
+                    logger.info(f"No subscription found for ID {subscription_id}")
+                    return None
+        except ValueError as e:
+            if str(e) == "User not found":
+                raise
+            logger.error(f"Invalid UUID format: {subscription_id}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching subscription: {e}")
+            return None
+    
+
+    async def update_subscription(self, subscription_id: str, subscription_data: Dict) -> Dict:
+        """Update subscription information."""
+        await self.init_pool()
+        try:
+            subscription_uuid = uuid.UUID(subscription_id)
+            admin_id = subscription_data.get("admin_id")
+            start_date = subscription_data.get("start_date")
+            end_date = subscription_data.get("end_date")
+            status = subscription_data.get("status", "active")
+            
+
+            if admin_id and isinstance(admin_id, str):
+                try:
+                    admin_id = uuid.UUID(admin_id)
+                except ValueError:
+                    logger.error(f"Invalid UUID format for admin_id: {admin_id}")
+                    return {"subscription_id": "", "updated": False}
+                    
+            async with self.pool.acquire() as conn:
+                query = """
+                    UPDATE subscriptions
+                    SET admin_id = $1, start_date = $2, end_date = $3, status = $4
+                    WHERE id = $5 RETURNING id
+                """
+                updated_id = await conn.fetchval(
+                    query,
+                    admin_id,
+                    start_date,
+                    end_date,
+                    status,
+                    subscription_uuid
+                )
+                if updated_id:
+                    logger.info(f"Subscription {subscription_id} updated")
+                    return {
+                        "subscription_id": subscription_id,
+                        "updated": True,
+                    }
+                else:
+                    logger.info(f"Subscription {subscription_id} not found for update")
+                    return {
+                        "subscription_id": "",
+                        "updated": False,
+                    }
+        except ValueError:
+            logger.error(f"Invalid UUID format: {subscription_id}")
+            return {"subscription_id": "", "updated": False}
+        except Exception as e:
+            logger.error(f"Error updating subscription: {e}")
+            return {
+                "subscription_id": "",
+                "updated": False,
+            }
