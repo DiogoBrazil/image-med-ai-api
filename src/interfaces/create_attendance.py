@@ -8,4 +8,5 @@ class CreateAttendance(BaseModel):
     model_result: str
     expected_result: str
     correct_diagnosis: bool
+    image_base64: str
     observation: str
