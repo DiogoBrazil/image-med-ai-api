@@ -66,7 +66,7 @@ class AuthMiddleware:
         request.state.user = token_data
     
     def _verify_api_key(self, api_key: str):
-        """Verifica se a API key é válida."""
+        """Checks if the API key is valid."""
         if not api_key:
             logger.warning("API Key missing in request")
             raise HTTPException(status_code=400, detail={"message": "API Key is required", "status_code": 400})
@@ -76,7 +76,7 @@ class AuthMiddleware:
             raise HTTPException(status_code=403, detail={"message": "Invalid API Key", "status_code": 403})
     
     async def _verify_token(self, token_value: str):
-        """Verifica e decodifica o token JWT."""
+        """Verifies and decodes the JWT token."""
         if not token_value:
             logger.warning("Token missing in request")
             raise HTTPException(status_code=401, detail={"message": "Authorization token is required", "status_code": 401})
@@ -100,7 +100,7 @@ class AuthMiddleware:
             raise HTTPException(status_code=401, detail={"message": f"Invalid token: {str(e)}", "status_code": 401})
     
     def _verify_admin_access(self, token_data: dict):
-        """Verifica se o usuário tem perfil de administrador."""
+        """Checks if the user has an administrator profile."""
         if token_data.get('profile') != 'general_administrator':
             logger.warning(f"User {token_data.get('user_id')} tried to access admin route without admin privileges")
             raise HTTPException(status_code=403, detail={
@@ -109,7 +109,7 @@ class AuthMiddleware:
             })
     
     def _verify_professional_access(self, token_data: dict):
-        """Verifica se o usuário tem perfil de profissional."""
+        """Checks if the user has a professional profile."""
         if token_data.get('profile') != 'professional':
             logger.warning(f"User {token_data.get('user_id')} tried to access professional route without appropriate privileges")
             raise HTTPException(status_code=403, detail={
@@ -119,8 +119,8 @@ class AuthMiddleware:
     
     async def _verify_health_unit_access(self, token_data: dict, health_unit_id: str):
         """
-        Verifica se o usuário tem acesso à unidade de saúde específica.
-        Esta implementação depende do repository, então apenas definimos a interface.
+        Checks if the user has access to the specific health unit.
+        This implementation depends on the repository, so we only define the interface.
         """
 
 

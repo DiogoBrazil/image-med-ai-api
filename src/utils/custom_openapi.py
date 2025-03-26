@@ -3,8 +3,8 @@ from fastapi import FastAPI
 
 def custom_openapi(app: FastAPI):
     """
-    Personaliza o esquema OpenAPI da aplicação.
-    Adiciona esquemas de segurança para API key e token JWT.
+    Customizes the OpenAPI schema of the application.
+    Adds security schemes for API key and JWT token.
     """
     if app.openapi_schema:
         return app.openapi_schema
@@ -13,10 +13,10 @@ def custom_openapi(app: FastAPI):
         title="Medical Diagnosis API",
         version="1.0.0",
         description=(
-            "API desenvolvida para o sistema de diagnóstico médico assistido por inteligência artificial. "
-            "Fornece funcionalidades para gerenciamento de usuários, unidades de saúde e registros de atendimentos "
-            "com diagnósticos usando modelos de IA para doenças respiratórias, tuberculose, osteoporose e câncer de mama. "
-            "Todos os endpoints requerem autenticação via API key e a maioria também requer autenticação via token JWT."
+            "API developed for the medical diagnosis system assisted by artificial intelligence. "
+            "Provides functionality for user management, health units, and attendance records "
+            "with diagnoses using AI models for respiratory diseases, tuberculosis, osteoporosis, and breast cancer. "
+            "All endpoints require API key authentication and most also require JWT token authentication."
         ),
         routes=app.routes,
     )
@@ -32,7 +32,7 @@ def custom_openapi(app: FastAPI):
         "type": "apiKey",
         "name": "api_key",
         "in": "header",
-        "description": "API key para acessar a API. Requerida para todas as requisições."
+        "description": "API key to access the API. Required for all requests."
     }
 
 
@@ -40,7 +40,7 @@ def custom_openapi(app: FastAPI):
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Token JWT obtido através do endpoint de login. Requerido para a maioria dos endpoints."
+        "description": "JWT token obtained through the login endpoint. Required for most endpoints."
     }
 
 

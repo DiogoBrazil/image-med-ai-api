@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Query
+from fastapi import APIRouter, Request
 from typing import Optional
 from ..controllers.user_controller import UserController
 from ..interfaces.create_user import CreateUser

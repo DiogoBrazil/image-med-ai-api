@@ -25,7 +25,6 @@ class AttendanceController:
             "action": "add_attendance",
             "ip_address": request.client.host
         }
-        
         if request.state.user.get("profile") != "professional":
             logger.warning(f"User {audit_data['user_id']} attempted to add attendance without professional privileges")
             return {
@@ -57,7 +56,7 @@ class AttendanceController:
             "action": "get_attendances",
             "ip_address": request.client.host
         }
-        
+
         user_profile = request.state.user.get("profile")
         
         if user_profile == "administrator":

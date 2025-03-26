@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Query
+from fastapi import APIRouter, Request, Query
 from typing import Optional
 from ..controllers.attendace_controller import AttendanceController
 from ..interfaces.create_attendance import CreateAttendance
@@ -14,39 +14,39 @@ router = APIRouter(
 
 attendance_controller = AttendanceController()
 
-@router.post("/", status_code=201, summary="Criar um novo atendimento")
+@router.post("/", status_code=201, summary="Create a new attendance")
 async def create_attendance(request: Request, attendance: CreateAttendance):
     """
-    Registra um novo atendimento com diagnóstico por IA.
+    Registers a new attendance with AI diagnosis.
     
-    - **Requer perfil de profissional**
-    - Registra automaticamente o profissional atual como responsável
+    - **Requires professional profile**
+    - Automatically registers the current professional as responsible
     
-    Retorna os detalhes do atendimento criado.
+    Returns the details of the created attendance.
     """
     return await attendance_controller.add_attendance(request, attendance)
 
-@router.get("/", summary="Listar atendimentos")
+@router.get("/", summary="List attendances")
 async def get_attendances(
     request: Request, 
     health_unit_id: Optional[str] = None,
-    model_used: Optional[str] = Query(None, description="Tipo de modelo utilizado: respiratory, tuberculosis, osteoporosis, breast"),
-    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
-    offset: int = Query(0, ge=0, description="Número de registros a pular")
+    model_used: Optional[str] = Query(None, description="Model type used: respiratory, tuberculosis, osteoporosis, breast"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    offset: int = Query(0, ge=0, description="Number of records to skip")
 ):
     """
-    Lista atendimentos com filtros opcionais.
+    Lists attendances with optional filters.
     
-    - **Administradores**: Veem atendimentos de suas unidades
-    - **Profissionais**: Veem apenas seus próprios atendimentos
+    - **Administrators**: See attendances from their units
+    - **Professionals**: See only their own attendances
     
-    Parâmetros de filtro:
-    - **health_unit_id**: Filtrar por unidade de saúde específica
-    - **model_used**: Filtrar por tipo de modelo (respiratory, tuberculosis, osteoporosis, breast)
-    - **limit**: Número máximo de registros (padrão: 100)
-    - **offset**: Paginação (padrão: 0)
+    Filter parameters:
+    - **health_unit_id**: Filter by specific health unit
+    - **model_used**: Filter by model type (respiratory, tuberculosis, osteoporosis, breast)
+    - **limit**: Maximum number of records (default: 100)
+    - **offset**: Pagination (default: 0)
     
-    Retorna lista de atendimentos.
+    Returns list of attendances.
     """
     return await attendance_controller.get_attendances(
         request, 
@@ -56,63 +56,63 @@ async def get_attendances(
         offset
     )
 
-@router.get("/{attendance_id}", summary="Obter atendimento por ID")
+@router.get("/{attendance_id}", summary="Get attendance by ID")
 async def get_attendance(
     request: Request, 
     attendance_id: str,
-    include_image: bool = Query(False, description="Incluir imagem base64 completa no resultado")
+    include_image: bool = Query(False, description="Include full base64 image in the result")
 ):
     """
-    Recupera informações de um atendimento específico.
+    Retrieves information of a specific attendance.
     
-    - **Administradores**: Podem ver atendimentos de suas unidades
-    - **Profissionais**: Podem ver apenas seus próprios atendimentos
+    - **Administrators**: Can see attendances from their units
+    - **Professionals**: Can see only their own attendances
     
-    Parâmetros:
-    - **include_image**: Se verdadeiro, inclui a imagem base64 completa na resposta
+    Parameters:
+    - **include_image**: If true, includes the complete base64 image in the response
     
-    Retorna detalhes do atendimento solicitado.
+    Returns details of the requested attendance.
     """
     return await attendance_controller.get_attendance_by_id(request, attendance_id, include_image)
 
-@router.put("/{attendance_id}", summary="Atualizar atendimento")
+@router.put("/{attendance_id}", summary="Update attendance")
 async def update_attendance(request: Request, attendance_id: str, attendance: UpdateAttendance):
     """
-    Atualiza informações de um atendimento existente.
+    Updates information of an existing attendance.
     
-    - **Administradores**: Podem atualizar atendimentos de suas unidades
-    - **Profissionais**: Podem atualizar apenas seus próprios atendimentos
+    - **Administrators**: Can update attendances from their units
+    - **Professionals**: Can update only their own attendances
     
-    Retorna confirmação da atualização.
+    Returns confirmation of the update.
     """
     return await attendance_controller.update_attendance(request, attendance_id, attendance)
 
-@router.delete("/{attendance_id}", summary="Remover atendimento")
+@router.delete("/{attendance_id}", summary="Remove attendance")
 async def delete_attendance(request: Request, attendance_id: str):
     """
-    Remove um atendimento do sistema.
+    Removes an attendance from the system.
     
-    - **Administradores**: Podem remover atendimentos de suas unidades
-    - **Profissionais**: Podem remover apenas seus próprios atendimentos
+    - **Administrators**: Can remove attendances from their units
+    - **Professionals**: Can remove only their own attendances
     
-    Retorna confirmação da remoção.
+    Returns confirmation of the removal.
     """
     return await attendance_controller.delete_attendance(request, attendance_id)
 
-@router.get("/statistics/summary", summary="Obter estatísticas de atendimentos")
+@router.get("/statistics/summary", summary="Get attendance statistics")
 async def get_statistics(
     request: Request,
-    period: str = Query("month", regex="^(day|week|month|year)$", description="Período de análise: day, week, month, year")
+    period: str = Query("month", regex="^(day|week|month|year)$", description="Analysis period: day, week, month, year")
 ):
     """
-    Obtém estatísticas de uso e precisão dos modelos de IA.
+    Gets statistics on usage and accuracy of AI models.
     
-    - **Requer perfil de administrador**
-    - Fornece estatísticas apenas para as unidades do administrador
+    - **Requires administrator profile**
+    - Provides statistics only for the administrator's units
     
-    Parâmetros:
-    - **period**: Período para análise (day, week, month, year)
+    Parameters:
+    - **period**: Period for analysis (day, week, month, year)
     
-    Retorna estatísticas de uso e precisão dos modelos.
+    Returns statistics on usage and accuracy of models.
     """
     return await attendance_controller.get_statistics(request, period)

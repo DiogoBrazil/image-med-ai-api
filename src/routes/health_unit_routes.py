@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Query
-from typing import Optional
+from fastapi import APIRouter, Request
 from ..controllers.health_unit_controller import HealthUnitController
 from ..interfaces.create_health_unit import CreateHealthUnit
 from ..interfaces.update_health_unit import UpdateHealthUnit
@@ -14,63 +13,63 @@ router = APIRouter(
 
 health_unit_controller = HealthUnitController()
 
-@router.post("/", status_code=201, summary="Criar uma nova unidade de saúde")
+@router.post("/", status_code=201, summary="Create a new health unit")
 async def create_health_unit(request: Request, health_unit: CreateHealthUnit):
     """
-    Cria uma nova unidade de saúde no sistema.
+    Creates a new health unit in the system.
     
-    - **Requer perfil de administrador**
-    - A unidade será vinculada automaticamente ao administrador que a criar
+    - **Requires administrator profile**
+    - The unit will be automatically linked to the administrator who creates it
     
-    Retorna os detalhes da unidade criada.
+    Returns the details of the created unit.
     """
     return await health_unit_controller.add_health_unit(request, health_unit)
 
-@router.get("/", summary="Listar unidades de saúde")
+@router.get("/", summary="List health units")
 async def get_health_units(request: Request):
     """
-    Lista unidades de saúde no sistema.
+    Lists health units in the system.
     
-    - **Administradores**: Podem ver suas próprias unidades
-    - **Profissionais**: Podem ver unidades do seu administrador
+    - **Administrators**: Can see their own units
+    - **Professionals**: Can see units of their administrator
     
-    Retorna lista de unidades de saúde.
+    Returns list of health units.
     """
     return await health_unit_controller.get_health_units(request)
 
-@router.get("/{unit_id}", summary="Obter unidade de saúde por ID")
+@router.get("/{unit_id}", summary="Get health unit by ID")
 async def get_health_unit(request: Request, unit_id: str):
     """
-    Recupera informações de uma unidade de saúde específica.
+    Retrieves information of a specific health unit.
     
-    - **Administradores**: Podem ver apenas suas próprias unidades
-    - **Profissionais**: Podem ver unidades do seu administrador
+    - **Administrators**: Can see only their own units
+    - **Professionals**: Can see units of their administrator
     
-    Retorna detalhes da unidade solicitada.
+    Returns details of the requested unit.
     """
     return await health_unit_controller.get_health_unit_by_id(request, unit_id)
 
-@router.put("/{unit_id}", summary="Atualizar unidade de saúde")
+@router.put("/{unit_id}", summary="Update health unit")
 async def update_health_unit(request: Request, unit_id: str, health_unit: UpdateHealthUnit):
     """
-    Atualiza informações de uma unidade de saúde existente.
+    Updates information of an existing health unit.
     
-    - **Requer perfil de administrador**
-    - O administrador só pode atualizar suas próprias unidades
+    - **Requires administrator profile**
+    - The administrator can only update their own units
     
-    Retorna confirmação da atualização.
+    Returns confirmation of the update.
     """
     return await health_unit_controller.update_health_unit(request, unit_id, health_unit)
 
-@router.delete("/{unit_id}", summary="Remover unidade de saúde")
+@router.delete("/{unit_id}", summary="Remove health unit")
 async def delete_health_unit(request: Request, unit_id: str):
     """
-    Remove uma unidade de saúde do sistema.
+    Removes a health unit from the system.
     
-    - **Requer perfil de administrador**
-    - O administrador só pode remover suas próprias unidades
-    - A unidade não pode ter atendimentos ou profissionais vinculados
+    - **Requires administrator profile**
+    - The administrator can only remove their own units
+    - The unit cannot have attendances or professionals linked to it
     
-    Retorna confirmação da remoção.
+    Returns confirmation of the removal.
     """
     return await health_unit_controller.delete_health_unit(request, unit_id)
