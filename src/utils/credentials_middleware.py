@@ -30,7 +30,7 @@ class AuthMiddleware:
         ]
         
 
-        self._verify_api_key(api_key)
+        await self._verify_api_key(api_key)
         
 
         if any([request.url.path.startswith(path) for path in public_paths]):
@@ -49,23 +49,23 @@ class AuthMiddleware:
                     "status_code": 403
                 })
 
-        elif self._is_admin_route(request.url.path):
-            self._verify_admin_access(token_data)
+        elif await self._is_admin_route(request.url.path):
+            await self._verify_admin_access(token_data)
         
 
-        if self._is_professional_route(request.url.path):
-            self._verify_professional_access(token_data)
+        if await self._is_professional_route(request.url.path):
+            await self._verify_professional_access(token_data)
         
 
-        if self._is_health_unit_route(request.url.path):
-            health_unit_id = self._extract_health_unit_id(request.url.path)
+        if await self._is_health_unit_route(request.url.path):
+            health_unit_id = await self._extract_health_unit_id(request.url.path)
             if health_unit_id:
                 await self._verify_health_unit_access(token_data, health_unit_id)
         
 
         request.state.user = token_data
     
-    def _verify_api_key(self, api_key: str):
+    async def _verify_api_key(self, api_key: str):
         """Checks if the API key is valid."""
         if not api_key:
             logger.warning("API Key missing in request")
@@ -99,7 +99,7 @@ class AuthMiddleware:
             logger.warning(f"Invalid token provided: {str(e)}")
             raise HTTPException(status_code=401, detail={"message": f"Invalid token: {str(e)}", "status_code": 401})
     
-    def _verify_admin_access(self, token_data: dict):
+    async def _verify_admin_access(self, token_data: dict):
         """Checks if the user has an administrator profile."""
         if token_data.get('profile') != 'general_administrator':
             logger.warning(f"User {token_data.get('user_id')} tried to access admin route without admin privileges")
@@ -108,7 +108,7 @@ class AuthMiddleware:
                 "status_code": 403
             })
     
-    def _verify_professional_access(self, token_data: dict):
+    async def _verify_professional_access(self, token_data: dict):
         """Checks if the user has a professional profile."""
         if token_data.get('profile') != 'professional':
             logger.warning(f"User {token_data.get('user_id')} tried to access professional route without appropriate privileges")
@@ -126,7 +126,7 @@ class AuthMiddleware:
 
         pass
     
-    def _is_admin_route(self, path: str) -> bool:
+    async def _is_admin_route(self, path: str) -> bool:
         """Checks if the route is exclusive for administrators."""
         admin_routes = [
             '/api/admin/',
@@ -137,7 +137,7 @@ class AuthMiddleware:
         ]
         return any([path.startswith(route) for route in admin_routes])
     
-    def _is_professional_route(self, path: str) -> bool:
+    async def _is_professional_route(self, path: str) -> bool:
         """Checks if the route is exclusive for professionals."""
         professional_routes = [
             '/api/attendances/create',
@@ -145,11 +145,11 @@ class AuthMiddleware:
         ]
         return any([path.startswith(route) for route in professional_routes])
     
-    def _is_health_unit_route(self, path: str) -> bool:
+    async def _is_health_unit_route(self, path: str) -> bool:
         """Checks if the route involves access to a specific health unit."""
         return '/api/health-units/' in path and not path.endswith('/health-units/')
     
-    def _extract_health_unit_id(self, path: str) -> str:
+    async def _extract_health_unit_id(self, path: str) -> str:
         """Extracts the health unit ID from the URL, if present."""
         parts = path.split('/')
         for i, part in enumerate(parts):
