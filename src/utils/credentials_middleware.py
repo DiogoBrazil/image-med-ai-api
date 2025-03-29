@@ -24,7 +24,7 @@ class AuthMiddleware:
         
         public_paths = [
             '/api/auth/login',
-            '/api/health',
+            '/api/status',
             '/api/docs',
             '/api/openapi.json'
         ]
@@ -32,13 +32,12 @@ class AuthMiddleware:
 
         await self._verify_api_key(api_key)
         
-
+        
         if any([request.url.path.startswith(path) for path in public_paths]):
             return
         
 
         token_data = await self._verify_token(token_value)
-        
 
 
         if request.url.path == '/api/users/subscriptions' or request.url.path.startswith('/api/users/subscriptions/'):

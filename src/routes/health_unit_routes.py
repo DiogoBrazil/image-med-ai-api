@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Request
 from ..controllers.health_unit_controller import HealthUnitController
 from ..interfaces.create_health_unit import CreateHealthUnit

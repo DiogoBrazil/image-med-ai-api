@@ -62,6 +62,8 @@ class UserController:
         Retrieves all users.
         If admin_id is provided, returns only users associated with that admin.
         """
+        print(f'REQUEST IN USERS==============================: {list(request)}')
+
         await self.auth_middleware.verify_request(request)
         
         audit_data = {

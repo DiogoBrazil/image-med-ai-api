@@ -51,23 +51,22 @@ class HealthUnitController:
             "action": "get_health_units",
             "ip_address": request.client.host
         }
-        
-        if request.state.user.get("profile") == "administrator":
+        if request.state.user.get("profile") == "general_administrator":
+            print("ENTROU NO ADMINISTRADOR GERAL")
+            return await self.health_unit_use_cases.get_health_units(audit_data)
+        elif request.state.user.get("profile") == "administrator":
+            print("ENTROU NO ADMINISTRADOR")
             admin_id = request.state.user.get("user_id")
+            return await self.health_unit_use_cases.get_health_units(admin_id, audit_data)
         else:
-            admin_id = request.state.user.get("admin_id")
-            
-            if not admin_id:
-                logger.warning(f"Professional {audit_data['user_id']} has no admin_id but attempted to get health units")
-                return {
-                    "detail": {
-                        "message": "You don't have permission to access this resource",
-                        "status_code": 403
-                    }
+            logger.warning(f"User {audit_data['user_id']} attempted to get health units without admin privileges")
+            return {
+                "detail": {
+                    "message": "Only administrators can view health units",
+                    "status_code": 403
                 }
+            }
         
-        return await self.health_unit_use_cases.get_health_units(admin_id, audit_data)
-
     async def get_health_unit_by_id(self, request: Request, unit_id: str):
         """
         Retrieves a health unit by ID.
@@ -98,7 +97,7 @@ class HealthUnitController:
             "ip_address": request.client.host
         }
         
-        if request.state.user.get("profile") != "administrator":
+        if request.state.user.get("profile") != "administrator" and request.state.user.get("profile") != "general_administrator":
             logger.warning(f"User {audit_data['user_id']} attempted to update health unit without admin privileges")
             return {
                 "detail": {

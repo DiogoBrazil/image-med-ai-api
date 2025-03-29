@@ -63,13 +63,12 @@ class HealthUnitUseCases:
             logger.error(f"Unexpected error when adding health unit: {e}")
             raise_http_error(500, "Unexpected error when adding health unit")
     
-    async def get_health_units(self, admin_id: str = None, audit_data=None):
+    async def get_health_units(self, audit_data=None,  admin_id: str = None):
         """
         Retrieve all health units or units associated with an admin.
         If admin_id is provided, return only units associated with that admin.
         """
         try:
-
             if admin_id:
                 admin = await self.user_repository.get_user_by_id(admin_id)
                 if not admin:
@@ -78,7 +77,7 @@ class HealthUnitUseCases:
             
 
             units = await self.health_unit_repository.get_health_units(admin_id)
-            
+            print(f'Units: {units}')
             return {
                 "detail": {
                     "message": "Health units retrieved successfully",
@@ -128,7 +127,7 @@ class HealthUnitUseCases:
 
             unit_data = health_unit.dict(exclude_unset=True)
             
-
+            
             if "name" in unit_data and not unit_data["name"]:
                 logger.error("Error updating health unit: Name cannot be empty")
                 raise_http_error(400, "Health unit name cannot be empty")

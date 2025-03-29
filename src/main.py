@@ -63,14 +63,14 @@ async def log_requests(request: Request, call_next):
             content={"detail": {"message": "Internal server error", "status_code": 500}}
         )
 
-@app.get("/api/health", tags=["health"])
+@app.get("/api/status", tags=["health check API"])
 async def health_check():
     """
     Checks if the API is working correctly.
     """
     return {"status": "healthy", "version": "1.0.0"}
 
-@app.post("/api/ensure-root", tags=["health"])
+@app.post("/api/ensure-root", tags=["health check API"])
 async def ensure_root():
     """
     Verifies and ensures that a root administrator user exists in the system.
