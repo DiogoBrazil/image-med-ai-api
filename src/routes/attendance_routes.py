@@ -31,29 +31,30 @@ async def get_attendances(
     request: Request, 
     health_unit_id: Optional[str] = None,
     model_used: Optional[str] = Query(None, description="Model type used: respiratory, tuberculosis, osteoporosis, breast"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
-    offset: int = Query(0, ge=0, description="Number of records to skip")
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(10, ge=1, le=100, description="Items per page")
 ):
     """
     Lists attendances with optional filters.
     
-    - **Administrators**: See attendances from their units
-    - **Professionals**: See only their own attendances
+    - **General Administrators**: See all attendances system-wide
+    - **Administrators**: See attendances from their own units only (with health_unit_id required if admin has multiple units)
+    - **Professionals**: Not allowed to access this endpoint
     
     Filter parameters:
-    - **health_unit_id**: Filter by specific health unit
+    - **health_unit_id**: Filter by specific health unit (required for administrators with multiple health units)
     - **model_used**: Filter by model type (respiratory, tuberculosis, osteoporosis, breast)
-    - **limit**: Maximum number of records (default: 100)
-    - **offset**: Pagination (default: 0)
+    - **page**: Page number (default: 1)
+    - **per_page**: Items per page (default: 10, max: 100)
     
-    Returns list of attendances.
+    Returns paginated list of attendances with total count and total pages for frontend pagination controls.
     """
     return await attendance_controller.get_attendances(
         request, 
         health_unit_id, 
         model_used,
-        limit,
-        offset
+        page,
+        per_page
     )
 
 @router.get("/{attendance_id}", summary="Get attendance by ID")
@@ -102,17 +103,20 @@ async def delete_attendance(request: Request, attendance_id: str):
 @router.get("/statistics/summary", summary="Get attendance statistics")
 async def get_statistics(
     request: Request,
-    period: str = Query("month", regex="^(day|week|month|year)$", description="Analysis period: day, week, month, year")
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
 ):
     """
-    Gets statistics on usage and accuracy of AI models.
+    Gets statistics on usage and accuracy of AI models for a specific date range.
     
-    - **Requires administrator profile**
-    - Provides statistics only for the administrator's units
+    - **General Administrators**: Receive statistics for all attendances across the system
+    - **Administrators**: Receive statistics only for their own units
+    - **Professionals**: Cannot access this endpoint
     
     Parameters:
-    - **period**: Period for analysis (day, week, month, year)
+    - **start_date**: Start date in YYYY-MM-DD format
+    - **end_date**: End date in YYYY-MM-DD format
     
-    Returns statistics on usage and accuracy of models.
+    Returns statistics on model usage count and accuracy percentage within the specified date range.
     """
-    return await attendance_controller.get_statistics(request, period)
+    return await attendance_controller.get_statistics(request, start_date, end_date)

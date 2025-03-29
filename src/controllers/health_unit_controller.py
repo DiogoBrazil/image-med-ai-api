@@ -25,7 +25,7 @@ class HealthUnitController:
             "ip_address": request.client.host
         }
         
-        if request.state.user.get("profile") != "administrator":
+        if request.state.user.get("profile") != "administrator" and request.state.user.get("profile") != "general_administrator":
             logger.warning(f"User {audit_data['user_id']} attempted to add health unit without admin privileges")
             return {
                 "detail": {
@@ -34,9 +34,8 @@ class HealthUnitController:
                 }
             }
         
-        admin_id = request.state.user.get("user_id")
             
-        return await self.health_unit_use_cases.add_health_unit(health_unit, admin_id, audit_data)
+        return await self.health_unit_use_cases.add_health_unit(health_unit, audit_data)
 
     async def get_health_units(self, request: Request):
         """
@@ -52,12 +51,10 @@ class HealthUnitController:
             "ip_address": request.client.host
         }
         if request.state.user.get("profile") == "general_administrator":
-            print("ENTROU NO ADMINISTRADOR GERAL")
             return await self.health_unit_use_cases.get_health_units(audit_data)
         elif request.state.user.get("profile") == "administrator":
-            print("ENTROU NO ADMINISTRADOR")
             admin_id = request.state.user.get("user_id")
-            return await self.health_unit_use_cases.get_health_units(admin_id, audit_data)
+            return await self.health_unit_use_cases.get_health_units(audit_data, admin_id)
         else:
             logger.warning(f"User {audit_data['user_id']} attempted to get health units without admin privileges")
             return {
@@ -119,10 +116,11 @@ class HealthUnitController:
             "user_id": request.state.user.get("user_id"),
             "action": "delete_health_unit",
             "target_unit_id": unit_id,
-            "ip_address": request.client.host
+            "ip_address": request.client.host,
+            "profile": request.state.user.get("profile")
         }
         
-        if request.state.user.get("profile") != "administrator":
+        if request.state.user.get("profile") != "administrator" and request.state.user.get("profile") != "general_administrator":
             logger.warning(f"User {audit_data['user_id']} attempted to delete health unit without admin privileges")
             return {
                 "detail": {

@@ -15,33 +15,28 @@ class HealthUnitUseCases:
         self.health_unit_repository = HealthUnitRepository()
         self.user_repository = UserRepository()
     
-    async def add_health_unit(self, health_unit: CreateHealthUnit, admin_id: str, audit_data=None):
+    async def add_health_unit(self, health_unit: CreateHealthUnit, audit_data=None):
         """Add a new health unit after validating the data."""
         try:
 
-            admin = await self.user_repository.get_user_by_id(admin_id)
-            if not admin:
-                logger.error(f"Error adding health unit: Admin with ID {admin_id} not found")
-                raise_http_error(404, "Administrator not found")
-                
-            if admin["profile"] != "administrator":
-                logger.error(f"Error adding health unit: User with ID {admin_id} is not an administrator")
-                raise_http_error(403, "User is not an administrator")
-            
-
             unit_data = health_unit.dict()
-            unit_data["admin_id"] = admin_id
-            
 
+            admin = await self.user_repository.get_user_by_id(unit_data.get("admin_id"))
+            if not admin:
+                logger.error(f"Error adding health unit: Admin with ID {unit_data.get('admin_id')} not found")
+                raise_http_error(404, "Administrator not found")
+                        
             if not unit_data.get("name"):
                 logger.error("Error adding health unit: Name cannot be empty")
                 raise_http_error(400, "Health unit name cannot be empty")
                 
+            if not unit_data.get("cnpj"):
+                logger.error("Error adding health unit: CNPJ cannot be empty")
+                raise_http_error(400, "CNPJ cannot be empty")
 
             if "status" in unit_data and unit_data["status"] not in ["active", "inactive"]:
                 logger.error("Error adding health unit: Invalid status")
-                raise_http_error(422, "Invalid status. Should be 'active' or 'inactive'")
-            
+                raise_http_error(422, "Invalid status. Should be 'active' or 'inactive'")        
 
             result = await self.health_unit_repository.add_health_unit(unit_data)
             
@@ -62,6 +57,7 @@ class HealthUnitUseCases:
         except Exception as e:
             logger.error(f"Unexpected error when adding health unit: {e}")
             raise_http_error(500, "Unexpected error when adding health unit")
+
     
     async def get_health_units(self, audit_data=None,  admin_id: str = None):
         """
@@ -77,7 +73,6 @@ class HealthUnitUseCases:
             
 
             units = await self.health_unit_repository.get_health_units(admin_id)
-            print(f'Units: {units}')
             return {
                 "detail": {
                     "message": "Health units retrieved successfully",
@@ -92,6 +87,7 @@ class HealthUnitUseCases:
             logger.error(f"Error retrieving health units: {e}")
             raise_http_error(500, "Error retrieving health units")
     
+
     async def get_health_unit_by_id(self, unit_id: str, audit_data=None):
         """Retrieve a health unit by ID."""
         try:
@@ -161,13 +157,25 @@ class HealthUnitUseCases:
     async def delete_health_unit(self, unit_id: str, audit_data=None):
         """Delete a health unit by ID."""
         try:
-            
-
             existing_unit = await self.health_unit_repository.get_health_unit_by_id(unit_id)
             if not existing_unit:
                 logger.error(f"Error deleting health unit: Unit with ID {unit_id} not found")
                 raise_http_error(404, "Health unit not found")
             
+            if audit_data and audit_data.get("user_id") and audit_data.get("profile") == "administrator":
+                admin_id = audit_data.get("user_id")
+                
+                admin_units = await self.health_unit_repository.get_health_units(admin_id)
+                
+                unit_belongs_to_admin = False
+                for unit in admin_units:
+                    if unit.get("id") == unit_id:
+                        unit_belongs_to_admin = True
+                        break
+                
+                if not unit_belongs_to_admin:
+                    logger.error(f"Administrator {admin_id} attempted to delete health unit {unit_id} that does not belong to them")
+                    raise_http_error(403, "You can only delete health units that belong to your account")
 
             result = await self.health_unit_repository.delete_health_unit(unit_id)
             
@@ -181,7 +189,6 @@ class HealthUnitUseCases:
                     }
                 }
             else:
-
                 if "reason" in result:
                     logger.error(f"Failed to delete health unit with ID {unit_id}: {result['reason']}")
                     raise_http_error(409, f"Cannot delete health unit: {result['reason']}")

@@ -104,19 +104,74 @@ class AttendanceRepository:
                 "added": False
             }
 
+    async def get_attendances_count(self,
+                              admin_id: Optional[str] = None,
+                              health_unit_id: Optional[str] = None,
+                              professional_id: Optional[str] = None,
+                              model_used: Optional[str] = None) -> int:
+        """
+        Count total number of attendances matching the filters for pagination.
+        """
+        await self.init_pool()
+        try:
+            query_parts = ["SELECT COUNT(*) FROM attendances WHERE 1=1"]
+            params = []
+            param_idx = 1
+            
+            if admin_id:
+                try:
+                    admin_uuid = uuid.UUID(admin_id)
+                    query_parts.append(f" AND admin_id = ${param_idx}")
+                    params.append(admin_uuid)
+                    param_idx += 1
+                except ValueError:
+                    logger.error(f"Invalid UUID format for admin_id: {admin_id}")
+            
+            if health_unit_id:
+                try:
+                    unit_uuid = uuid.UUID(health_unit_id)
+                    query_parts.append(f" AND health_unit_id = ${param_idx}")
+                    params.append(unit_uuid)
+                    param_idx += 1
+                except ValueError:
+                    logger.error(f"Invalid UUID format for health_unit_id: {health_unit_id}")
+            
+            if professional_id:
+                try:
+                    prof_uuid = uuid.UUID(professional_id)
+                    query_parts.append(f" AND professional_id = ${param_idx}")
+                    params.append(prof_uuid)
+                    param_idx += 1
+                except ValueError:
+                    logger.error(f"Invalid UUID format for professional_id: {professional_id}")
+            
+            if model_used:
+                query_parts.append(f" AND model_used = ${param_idx}")
+                params.append(model_used)
+                param_idx += 1
+            
+            query = " ".join(query_parts)
+            
+            async with self.pool.acquire() as conn:
+                count = await conn.fetchval(query, *params)
+                logger.info(f"Total attendance count: {count}")
+                return count
+        except Exception as e:
+            logger.error(f"Error counting attendances: {e}")
+            return 0
+            
     async def get_attendances(self, 
                               admin_id: Optional[str] = None,
                               health_unit_id: Optional[str] = None,
                               professional_id: Optional[str] = None,
                               model_used: Optional[str] = None,
-                              limit: int = 100,
+                              limit: int = 10,
                               offset: int = 0) -> List[Dict]:
         """
-        Retrieve attendances with optional filtering.
+        Retrieve attendances with optional filtering and pagination.
         """
         await self.init_pool()
         try:
-
             query_parts = ["SELECT * FROM attendances WHERE 1=1"]
             params = []
             param_idx = 1
@@ -157,13 +212,11 @@ class AttendanceRepository:
             query_parts.append(f" ORDER BY attendance_date DESC LIMIT ${param_idx} OFFSET ${param_idx+1}")
             params.extend([limit, offset])
             
-
             query = " ".join(query_parts)
             
             async with self.pool.acquire() as conn:
                 attendances = await conn.fetch(query, *params)
                 
-
                 result = []
                 for attendance in attendances:
                     attendance_dict = {
@@ -200,7 +253,7 @@ class AttendanceRepository:
                     
                     result.append(attendance_dict)
                 
-                logger.info(f"Found {len(result)} attendances")
+                logger.info(f"Found {len(result)} attendances (page with offset {offset}, limit {limit})")
                 return result
         except Exception as e:
             logger.error(f"Error fetching attendances: {e}")
@@ -403,47 +456,81 @@ class AttendanceRepository:
                 "deleted": False
             }
     
-    async def get_statistics(self, admin_id: str, period: str = "month") -> Dict:
+    async def get_statistics(self, admin_id: Optional[str] = None, start_date: str = None, end_date: str = None) -> Dict:
         """
-        Get statistics about model accuracy and usage.
-        period can be 'day', 'week', 'month', 'year'
+        Get statistics about model accuracy and usage within a specific date range.
+        
+        Parameters:
+        - admin_id: ID of the administrator (None for general_administrator to get all stats)
+        - start_date: Start date in YYYY-MM-DD format
+        - end_date: End date in YYYY-MM-DD format
+        
+        If admin_id is None, returns statistics for all attendances (used by general_administrator)
         """
         await self.init_pool()
         try:
-            admin_uuid = uuid.UUID(admin_id)
-            
 
-            interval_map = {
-                "day": "1 day",
-                "week": "1 week",
-                "month": "1 month",
-                "year": "1 year"
-            }
-            interval = interval_map.get(period.lower(), "1 month")
+            from datetime import datetime
+            
+            try:
+                start_date_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+                end_date_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                logger.error(f"Invalid date format: start_date={start_date}, end_date={end_date}")
+                return {
+                    "period": f"{start_date} to {end_date}",
+                    "message": "Invalid date format. Dates must be in YYYY-MM-DD format",
+                    "model_usage": {},
+                    "model_accuracy": {}
+                }
             
             async with self.pool.acquire() as conn:
 
-                model_count_query = """
-                    SELECT model_used, COUNT(*) as count
-                    FROM attendances
-                    WHERE admin_id = $1
-                    AND attendance_date > CURRENT_DATE - INTERVAL $2
-                    GROUP BY model_used
-                """
-                model_counts = await conn.fetch(model_count_query, admin_uuid, interval)
-                
+                if admin_id is None:
+                    model_count_query = """
+                        SELECT model_used, COUNT(*) as count
+                        FROM attendances
+                        WHERE attendance_date::date >= $1 AND attendance_date::date <= $2
+                        GROUP BY model_used
+                    """
+                    model_counts = await conn.fetch(model_count_query, start_date_dt, end_date_dt)
+                    
+                    accuracy_query = """
+                        SELECT model_used, 
+                               COUNT(*) FILTER (WHERE correct_diagnosis = true) as correct,
+                               COUNT(*) as total
+                        FROM attendances
+                        WHERE attendance_date::date >= $1 AND attendance_date::date <= $2
+                        AND expected_result IS NOT NULL
+                        GROUP BY model_used
+                    """
+                    accuracy_data = await conn.fetch(accuracy_query, start_date_dt, end_date_dt)
+                    logger.info(f"Retrieved system-wide statistics (general_administrator) from {start_date} to {end_date}")
+                else:
 
-                accuracy_query = """
-                    SELECT model_used, 
-                           COUNT(*) FILTER (WHERE correct_diagnosis = true) as correct,
-                           COUNT(*) as total
-                    FROM attendances
-                    WHERE admin_id = $1
-                    AND attendance_date > CURRENT_DATE - INTERVAL $2
-                    AND expected_result IS NOT NULL
-                    GROUP BY model_used
-                """
-                accuracy_data = await conn.fetch(accuracy_query, admin_uuid, interval)
+                    admin_uuid = uuid.UUID(admin_id)
+                    
+                    model_count_query = """
+                        SELECT model_used, COUNT(*) as count
+                        FROM attendances
+                        WHERE admin_id = $1
+                        AND attendance_date::date >= $2 AND attendance_date::date <= $3
+                        GROUP BY model_used
+                    """
+                    model_counts = await conn.fetch(model_count_query, admin_uuid, start_date_dt, end_date_dt)
+                    
+                    accuracy_query = """
+                        SELECT model_used, 
+                               COUNT(*) FILTER (WHERE correct_diagnosis = true) as correct,
+                               COUNT(*) as total
+                        FROM attendances
+                        WHERE admin_id = $1
+                        AND attendance_date::date >= $2 AND attendance_date::date <= $3
+                        AND expected_result IS NOT NULL
+                        GROUP BY model_used
+                    """
+                    accuracy_data = await conn.fetch(accuracy_query, admin_uuid, start_date_dt, end_date_dt)
+                    logger.info(f"Retrieved statistics for admin {admin_id} from {start_date} to {end_date}")
                 
 
                 model_usage = {row["model_used"]: row["count"] for row in model_counts}
@@ -458,15 +545,35 @@ class AttendanceRepository:
                             "accuracy_percentage": round(accuracy, 2)
                         }
                 
-                logger.info(f"Statistics retrieved for admin {admin_id}")
+
+                if not model_usage:
+                    logger.info(f"No model usage found for period {start_date} to {end_date}")
+                    return {
+                        "period": f"{start_date} to {end_date}",
+                        "message": "No model usage found for this period",
+                        "model_usage": {},
+                        "model_accuracy": {}
+                    }
+                
+                logger.info(f"Statistics retrieved successfully")
                 return {
-                    "period": period,
+                    "period": f"{start_date} to {end_date}",
                     "model_usage": model_usage,
                     "model_accuracy": model_accuracy
                 }
         except ValueError:
             logger.error(f"Invalid UUID format: {admin_id}")
-            return {}
+            return {
+                "period": f"{start_date} to {end_date}",
+                "message": "Invalid administrator ID format",
+                "model_usage": {},
+                "model_accuracy": {}
+            }
         except Exception as e:
             logger.error(f"Error getting statistics: {e}")
-            return {}
+            return {
+                "period": f"{start_date} to {end_date}",
+                "message": "An error occurred while retrieving statistics",
+                "model_usage": {},
+                "model_accuracy": {}
+            }

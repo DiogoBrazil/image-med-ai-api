@@ -24,10 +24,6 @@ class AttendanceUseCases:
             if not professional:
                 logger.error(f"Error adding attendance: Professional with ID {professional_id} not found")
                 raise_http_error(404, "Professional not found")
-                
-            if professional["profile"] != "professional":
-                logger.error(f"Error adding attendance: User with ID {professional_id} is not a professional")
-                raise_http_error(403, "User is not a healthcare professional")
             
             admin_id = professional.get("admin_id")
             if not admin_id:
@@ -95,19 +91,50 @@ class AttendanceUseCases:
                              health_unit_id: str = None,
                              professional_id: str = None,
                              model_used: str = None,
-                             limit: int = 100,
+                             limit: int = 10,
                              offset: int = 0,
+                             page: int = 1,
+                             per_page: int = 10,
                              audit_data=None):
         """
         Retrieve attendances with optional filtering.
+        Only administrators can view attendance lists.
+        For administrators with multiple health units, health_unit_id is required.
         """
         try:
+
             if model_used:
                 valid_models = ["respiratory", "tuberculosis", "osteoporosis", "breast"]
                 if model_used not in valid_models:
                     logger.error(f"Error retrieving attendances: Invalid model '{model_used}'")
                     raise_http_error(422, f"Invalid model. Should be one of: {', '.join(valid_models)}")
             
+
+            user_id = audit_data.get("user_id") if audit_data else None
+            is_general_admin = False
+            
+            if user_id:
+                user = await self.user_repository.get_user_by_id(user_id)
+                is_general_admin = user and user.get("profile") == "general_administrator"
+            
+
+            if admin_id and not professional_id and not is_general_admin:
+                health_units = await self.health_unit_repository.get_health_units(admin_id)
+                
+
+                if len(health_units) > 1 and not health_unit_id:
+                    logger.error(f"Error retrieving attendances: Administrator with multiple health units must specify health_unit_id")
+                    raise_http_error(400, "You have multiple health units. Please specify a health_unit_id to filter attendances.")
+            
+
+            total_count = await self.attendance_repository.get_attendances_count(
+                admin_id=admin_id,
+                health_unit_id=health_unit_id,
+                professional_id=professional_id,
+                model_used=model_used
+            )
+            
+
             attendances = await self.attendance_repository.get_attendances(
                 admin_id=admin_id,
                 health_unit_id=health_unit_id,
@@ -117,15 +144,24 @@ class AttendanceUseCases:
                 offset=offset
             )
             
+
             for attendance in attendances:
                 if "image_base64" in attendance:
                     attendance["image_base64"] = attendance["image_base64"][:100] + "..."
+            
+
+            total_pages = (total_count + per_page - 1) // per_page
             
             return {
                 "detail": {
                     "message": "Attendances retrieved successfully",
                     "attendances": attendances,
-                    "count": len(attendances),
+                    "pagination": {
+                        "total_count": total_count,
+                        "total_pages": total_pages,
+                        "current_page": page,
+                        "per_page": per_page
+                    },
                     "status_code": 200
                 }
             }
@@ -266,10 +302,15 @@ class AttendanceUseCases:
             logger.error(f"Error deleting attendance: {e}")
             raise_http_error(500, "Error deleting attendance")
     
-    async def get_statistics(self, admin_id: str, period: str = "month", audit_data=None):
+    async def get_statistics(self, admin_id: str, start_date: str, end_date: str, is_general_admin: bool = False, audit_data=None):
         """
-        Get statistics about model usage and accuracy for an admin.
-        Period can be 'day', 'week', 'month', 'year'.
+        Get statistics about model usage and accuracy for a specific date range.
+        For general_administrator, statistics include all attendances across the system.
+        For regular administrators, statistics include only their own attendances.
+        
+        Parameters:
+        - start_date: Start date in YYYY-MM-DD format
+        - end_date: End date in YYYY-MM-DD format
         """
         try:
             admin = await self.user_repository.get_user_by_id(admin_id)
@@ -277,18 +318,21 @@ class AttendanceUseCases:
                 logger.error(f"Error retrieving statistics: Admin with ID {admin_id} not found")
                 raise_http_error(404, "Administrator not found")
             
-            valid_periods = ["day", "week", "month", "year"]
-            if period not in valid_periods:
-                logger.error(f"Error retrieving statistics: Invalid period '{period}'")
-                raise_http_error(422, f"Invalid period. Should be one of: {', '.join(valid_periods)}")
+
+            statistics_admin_id = None if is_general_admin else admin_id
+            statistics = await self.attendance_repository.get_statistics(statistics_admin_id, start_date, end_date)
             
-            statistics = await self.attendance_repository.get_statistics(admin_id, period)
+
+            message = statistics.get("message", "Statistics retrieved successfully")
+            
+
+            status_code = 204 if "No model usage found" in message else 200
             
             return {
                 "detail": {
-                    "message": "Statistics retrieved successfully",
+                    "message": message,
                     "statistics": statistics,
-                    "status_code": 200
+                    "status_code": status_code
                 }
             }
         except HTTPException as http_exc:
